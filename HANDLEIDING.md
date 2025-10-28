@@ -1,42 +1,64 @@
-# Seafile API Client - Handleiding
+# SeaTable API Client - Handleiding
 
-Een eenvoudige PHP client voor communicatie met de Seafile API. Werkt met API tokens van de Seafile Business/Professional Edition.
+Een eenvoudige PHP client voor communicatie met de SeaTable API. **Ondersteunt volledige SQL queries** (SELECT, INSERT, UPDATE, DELETE). Werkt met API tokens van SeaTable Business/Enterprise Edition.
 
 ## Inhoudsopgave
 
-1. [Installatie](#installatie)
-2. [Snelstart](#snelstart)
-3. [API Token verkrijgen](#api-token-verkrijgen)
-4. [Basis gebruik](#basis-gebruik)
-5. [SQL-achtige queries](#sql-achtige-queries)
-6. [Complete API referentie](#complete-api-referentie)
-7. [Foutafhandeling](#foutafhandeling)
-8. [Voorbeelden](#voorbeelden)
+1. [Wat is SeaTable?](#wat-is-seatable)
+2. [Installatie](#installatie)
+3. [Snelstart](#snelstart)
+4. [API Token verkrijgen](#api-token-verkrijgen)
+5. [Authenticatie](#authenticatie)
+6. [SQL Queries](#sql-queries)
+   - [SELECT](#select-queries)
+   - [INSERT](#insert-queries)
+   - [UPDATE](#update-queries)
+   - [DELETE](#delete-queries)
+7. [REST API Methoden](#rest-api-methoden)
+8. [Complete API Referentie](#complete-api-referentie)
+9. [Foutafhandeling](#foutafhandeling)
+10. [Voorbeelden](#voorbeelden)
+
+## Wat is SeaTable?
+
+SeaTable is een no-code database platform (vergelijkbaar met Airtable) waarmee je databases kunt maken en beheren via een webinterface. De SeaTable API geeft je programmatische toegang tot je data met:
+
+- **Volledige SQL ondersteuning** - Gebruik echte SQL queries (SELECT, INSERT, UPDATE, DELETE)
+- **REST API** - Voor CRUD operaties op individuele rijen
+- **No dependencies** - Deze client heeft alleen PHP met cURL nodig
+- **Eenvoudig** - Slechts 1 bestand (`SeaTableClient.php`)
+
+### SeaTable Hiërarchie
+
+```
+Base (vergelijkbaar met een database)
+  └── Table (vergelijkbaar met een tabel)
+       └── Rows (records/rijen)
+            └── Columns (velden/kolommen)
+```
 
 ## Installatie
 
-De client bestaat uit slechts **2 bestanden** die je nodig hebt:
+De client bestaat uit slechts **2 bestanden**:
 
-1. `SeafileClient.php` - De hoofdclient
+1. `SeaTableClient.php` - De hoofdclient
 2. `examples.php` - Voorbeeldcode (optioneel)
 
 ### Vereisten
 
 - PHP 7.0 of hoger
 - cURL extensie ingeschakeld
-- Toegang tot een Seafile server (Business/Professional Edition)
+- Toegang tot een SeaTable server (Cloud of Self-hosted)
+- Een SeaTable API token
 
 ### Setup
 
-1. Download de bestanden naar je project:
-   ```bash
-   curl -O https://jouw-repo/SeafileClient.php
-   ```
+1. Download `SeaTableClient.php` naar je project
 
 2. Include de client in je PHP script:
    ```php
    <?php
-   require_once 'SeafileClient.php';
+   require_once 'SeaTableClient.php';
    ```
 
 Dat is alles! Geen Composer, geen dependencies, gewoon simpel.
@@ -45,896 +67,1237 @@ Dat is alles! Geen Composer, geen dependencies, gewoon simpel.
 
 ```php
 <?php
-require_once 'SeafileClient.php';
+require_once 'SeaTableClient.php';
 
-// Configuratie
-$serverUrl = 'https://jouw-seafile-server.com';
-$username = 'jouw@email.com';
-$password = 'jouw-wachtwoord';
+// 1. Maak client aan
+$client = new SeaTableClient(
+    'https://cloud.seatable.io',  // Server URL
+    'jouw-api-token-hier'         // API token
+);
 
-// Stap 1: Verkrijg een API token
-$token = SeafileClient::getToken($serverUrl, $username, $password);
+// 2. Test authenticatie
+if ($client->ping()) {
+    echo "Verbonden!\n";
+}
 
-// Stap 2: Maak een client aan
-$client = new SeafileClient($serverUrl, $token);
+// 3. Voer SQL query uit
+$result = $client->query("SELECT * FROM Employees WHERE Department = 'Sales' LIMIT 10");
 
-// Stap 3: Gebruik de API!
-$libraries = $client->getLibraries();
-foreach ($libraries as $lib) {
-    echo "Bibliotheek: {$lib['name']}\n";
+// 4. Verwerk resultaten
+foreach ($result['results'] as $row) {
+    echo $row['Name'] . "\n";
 }
 ```
 
 ## API Token verkrijgen
 
-Je hebt een API token nodig om te authenticeren. Er zijn twee manieren:
+Je hebt een API token nodig om te authenticeren met de SeaTable API.
 
-### Methode 1: Via username en password (aanbevolen voor eerste keer)
+### Stappen om een API token te maken:
 
-```php
-$token = SeafileClient::getToken(
-    'https://jouw-seafile-server.com',
-    'jouw@email.com',
-    'jouw-wachtwoord'
-);
+1. Log in op je SeaTable account
+2. Open de base waar je toegang toe wilt
+3. Klik op het **menu** icoon (drie puntjes) rechtsboven
+4. Selecteer **Advanced** → **API Token**
+5. Klik op **Generate API Token**
+6. Kies **Read-Write** permissies (of Read-only als je alleen data wilt lezen)
+7. Kopieer het gegenereerde token
 
-if ($token) {
-    echo "Je token is: $token\n";
-    // Bewaar dit token veilig! Je kunt het hergebruiken.
-} else {
-    echo "Kon geen token verkrijgen\n";
-}
-```
+**💡 Belangrijk:**
+- Een API token is **permanent geldig** (vervalt niet)
+- Elk API token is gekoppeld aan **één specifieke base**
+- Bewaar je token veilig! Voeg het niet toe aan Git
 
-### Methode 2: Gebruik een bestaand token
+### Token opslaan
 
-Als je al een token hebt, gebruik het direct:
+**Aanbevolen:** Gebruik omgevingsvariabelen of een config bestand:
 
 ```php
-$client = new SeafileClient(
-    'https://jouw-seafile-server.com',
-    'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0'
-);
-```
-
-**💡 Tip:** Bewaar je token in een configuratiebestand of omgevingsvariabele, niet hardcoded in je code!
-
-```php
-// .env bestand of config.php
-define('SEAFILE_TOKEN', 'jouw-token-hier');
+// .env of config.php (buiten webroot!)
+define('SEATABLE_URL', 'https://cloud.seatable.io');
+define('SEATABLE_API_TOKEN', 'jouw-token-hier');
 
 // In je script
-$client = new SeafileClient($serverUrl, SEAFILE_TOKEN);
+$client = new SeaTableClient(SEATABLE_URL, SEATABLE_API_TOKEN);
 ```
 
-## Basis gebruik
+## Authenticatie
 
-### Connectie testen
+SeaTable gebruikt een **twee-staps authenticatie**:
+
+1. **API Token** (permanent) - Jij maakt deze aan in de SeaTable interface
+2. **Base Token** (3 dagen geldig) - Wordt automatisch gegenereerd door de client
+
+De SeaTableClient handelt dit automatisch af! Je hoeft alleen je API token te configureren.
+
+```php
+$client = new SeaTableClient($serverUrl, $apiToken);
+
+// De client genereert automatisch een base token bij de eerste request
+// Base tokens worden automatisch vernieuwd als ze verlopen
+```
+
+### Handmatige authenticatie test
 
 ```php
 if ($client->ping()) {
-    echo "Verbinding OK!\n";
+    echo "Authenticatie succesvol!\n";
+    echo "Base UUID: " . $client->getBaseUuid() . "\n";
 } else {
-    echo "Geen verbinding: " . $client->getLastError() . "\n";
+    echo "Fout: " . $client->getLastError() . "\n";
 }
 ```
 
-### Account informatie ophalen
+## SQL Queries
+
+**Dit is de krachtigste feature van SeaTable!** Je kunt echte SQL queries gebruiken.
+
+### SELECT Queries
+
+#### Basis SELECT
 
 ```php
-$info = $client->getAccountInfo();
-echo "Gebruiker: {$info['email']}\n";
-echo "Ruimte gebruikt: {$info['usage']} bytes\n";
+// Alle rijen
+$result = $client->query("SELECT * FROM Employees");
+
+// Specifieke kolommen
+$result = $client->query("SELECT Name, Email, Salary FROM Employees");
+
+// Met LIMIT
+$result = $client->query("SELECT * FROM Employees LIMIT 100");
 ```
 
-### Bibliotheken (repositories) ophalen
+#### WHERE Clausules
 
 ```php
-$libraries = $client->getLibraries();
-foreach ($libraries as $lib) {
-    echo "ID: {$lib['id']}\n";
-    echo "Naam: {$lib['name']}\n";
-    echo "Grootte: {$lib['size']} bytes\n";
-}
+// Vergelijkingen
+$result = $client->query("SELECT * FROM Employees WHERE Salary > 50000");
+
+// LIKE operator
+$result = $client->query("SELECT * FROM Employees WHERE Name LIKE '%John%'");
+
+// Meerdere voorwaarden
+$result = $client->query("
+    SELECT * FROM Employees
+    WHERE Department = 'Sales'
+    AND Salary > 40000
+    AND Active = TRUE
+");
+
+// IN operator
+$result = $client->query("
+    SELECT * FROM Employees
+    WHERE Department IN ('Sales', 'Marketing', 'IT')
+");
+
+// Datum filtering
+$result = $client->query("
+    SELECT * FROM Employees
+    WHERE _ctime >= '2024-01-01 00:00:00'
+    AND _ctime < '2025-01-01 00:00:00'
+");
+
+// IS NULL / IS NOT NULL
+$result = $client->query("SELECT * FROM Employees WHERE Email IS NOT NULL");
 ```
 
-### Directory inhoud bekijken
+#### ORDER BY
 
 ```php
-$libraryId = 'je-library-id-hier';
-$items = $client->listDirectory($libraryId, '/');
+// Oplopend
+$result = $client->query("SELECT * FROM Employees ORDER BY Name ASC");
 
-foreach ($items as $item) {
-    if ($item['type'] === 'dir') {
-        echo "[MAP]    {$item['name']}\n";
-    } else {
-        echo "[BESTAND] {$item['name']} ({$item['size']} bytes)\n";
+// Aflopend
+$result = $client->query("SELECT * FROM Employees ORDER BY Salary DESC");
+
+// Meerdere kolommen
+$result = $client->query("
+    SELECT * FROM Employees
+    ORDER BY Department ASC, Salary DESC
+");
+```
+
+#### LIMIT en OFFSET
+
+```php
+// Eerste 10 rijen
+$result = $client->query("SELECT * FROM Employees LIMIT 10");
+
+// Met offset (paginering)
+$result = $client->query("SELECT * FROM Employees LIMIT 10 OFFSET 20");
+
+// Let op: Maximum 10,000 rijen per query!
+```
+
+#### Aggregatie Functies
+
+```php
+// COUNT
+$result = $client->query("SELECT COUNT(*) as total FROM Employees");
+$total = $result['results'][0]['total'];
+
+// SUM
+$result = $client->query("SELECT SUM(Salary) as total_salary FROM Employees");
+
+// AVG
+$result = $client->query("SELECT AVG(Salary) as avg_salary FROM Employees");
+
+// MIN en MAX
+$result = $client->query("
+    SELECT MIN(Salary) as min_sal, MAX(Salary) as max_sal
+    FROM Employees
+");
+```
+
+#### GROUP BY
+
+```php
+// Groeperen
+$result = $client->query("
+    SELECT Department, COUNT(*) as count
+    FROM Employees
+    GROUP BY Department
+");
+
+// Met meerdere kolommen
+$result = $client->query("
+    SELECT Department, Active, COUNT(*) as count
+    FROM Employees
+    GROUP BY Department, Active
+");
+
+// Met HAVING
+$result = $client->query("
+    SELECT Department, AVG(Salary) as avg_salary
+    FROM Employees
+    GROUP BY Department
+    HAVING AVG(Salary) > 50000
+");
+```
+
+#### JOIN Queries
+
+SeaTable ondersteunt INNER JOIN (sinds versie 4.3):
+
+```php
+$result = $client->query("
+    SELECT e.Name, e.Email, d.DepartmentName
+    FROM Employees e
+    INNER JOIN Departments d ON e.DepartmentID = d._id
+    WHERE d.Active = TRUE
+");
+```
+
+#### DISTINCT
+
+```php
+// Unieke waarden
+$result = $client->query("SELECT DISTINCT Department FROM Employees");
+
+// Met meerdere kolommen
+$result = $client->query("SELECT DISTINCT Department, Location FROM Employees");
+```
+
+#### Helper Methode voor SELECT
+
+Als je geen complexe SQL nodig hebt, gebruik de helper methode:
+
+```php
+$result = $client->select(
+    'Employees',              // Tabel naam
+    ['Name', 'Email'],        // Kolommen (leeg = alle)
+    "Department = 'Sales'",   // WHERE clausule
+    'Salary DESC',            // ORDER BY
+    10                        // LIMIT
+);
+```
+
+### INSERT Queries
+
+**Let op:** INSERT werkt alleen voor **gearchiveerde bases** (big data storage)!
+
+#### Enkele rij invoegen
+
+```php
+$result = $client->query("
+    INSERT INTO Employees (Name, Email, Department, Salary)
+    VALUES ('John Doe', 'john@example.com', 'Sales', 55000)
+");
+```
+
+#### Helper Methode voor INSERT
+
+```php
+$result = $client->insert('Employees', [
+    'Name' => 'John Doe',
+    'Email' => 'john@example.com',
+    'Department' => 'Sales',
+    'Salary' => 55000
+]);
+```
+
+**Voor normale (niet-gearchiveerde) bases:** Gebruik de REST API methode `appendRow()`:
+
+```php
+$result = $client->appendRow('Employees', [
+    'Name' => 'John Doe',
+    'Email' => 'john@example.com',
+    'Department' => 'Sales',
+    'Salary' => 55000
+]);
+```
+
+### UPDATE Queries
+
+```php
+// Update met WHERE
+$result = $client->query("
+    UPDATE Employees
+    SET Salary = 60000, Department = 'Management'
+    WHERE Name = 'John Doe'
+");
+
+// Meerdere rijen updaten
+$result = $client->query("
+    UPDATE Employees
+    SET Salary = Salary * 1.1
+    WHERE Department = 'Sales' AND Active = TRUE
+");
+```
+
+#### Helper Methode voor UPDATE
+
+```php
+$result = $client->update(
+    'Employees',                    // Tabel
+    ['Salary' => 60000],           // Data
+    "Name = 'John Doe'"            // WHERE (verplicht!)
+);
+```
+
+**⚠️ Belangrijk:** De WHERE clausule is verplicht voor veiligheid!
+
+### DELETE Queries
+
+```php
+// Delete met WHERE
+$result = $client->query("
+    DELETE FROM Employees
+    WHERE Active = FALSE
+    AND _ctime < '2020-01-01'
+");
+
+// Specifieke rij
+$result = $client->query("DELETE FROM Employees WHERE _id = 'abc123'");
+```
+
+#### Helper Methode voor DELETE
+
+```php
+$result = $client->delete(
+    'Employees',
+    "Active = FALSE"  // WHERE (verplicht!)
+);
+```
+
+**⚠️ Belangrijk:** De WHERE clausule is verplicht voor veiligheid!
+
+### SQL Query Limieten
+
+- **Maximum 10,000 rijen** per query
+- Zonder LIMIT worden standaard **100 rijen** geretourneerd
+- JOIN wordt ondersteund (alleen INNER JOIN)
+- Subqueries hebben beperkte ondersteuning
+
+### Resultaten Verwerken
+
+```php
+$result = $client->query("SELECT * FROM Employees LIMIT 10");
+
+if ($result === false) {
+    echo "Fout: " . $client->getLastError() . "\n";
+} else {
+    // Haal rijen op
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+
+    echo "Gevonden: " . count($rows) . " rijen\n";
+
+    foreach ($rows as $row) {
+        echo "Naam: {$row['Name']}, Email: {$row['Email']}\n";
+    }
+
+    // Metadata (indien beschikbaar)
+    if (isset($result['metadata'])) {
+        echo "Query duurde: {$result['metadata']['duration']}ms\n";
     }
 }
 ```
 
-### Bestanden uploaden
+## REST API Methoden
+
+Naast SQL queries biedt SeaTable ook REST API methoden voor CRUD operaties.
+
+### Rijen Ophalen
 
 ```php
-$result = $client->uploadFile(
-    $libraryId,           // Library ID
-    '/pad/naar/lokaal-bestand.pdf',  // Lokaal bestand
-    '/Documents/',        // Remote map
-    'nieuw-bestand.pdf'   // Nieuwe naam (optioneel)
+// Haal alle rijen op uit een tabel
+$rows = $client->listRows('Employees');
+
+// Met view filter
+$rows = $client->listRows('Employees', 'Active Employees');
+
+// Met limit
+$rows = $client->listRows('Employees', null, 50);
+```
+
+### Rij Toevoegen
+
+```php
+// Enkele rij
+$result = $client->appendRow('Employees', [
+    'Name' => 'Jane Smith',
+    'Email' => 'jane@example.com',
+    'Department' => 'IT'
+]);
+
+// De rij ID is beschikbaar in het resultaat
+$rowId = $result['_id'];
+```
+
+### Meerdere Rijen Toevoegen
+
+```php
+$rows = [
+    ['Name' => 'Alice', 'Email' => 'alice@example.com'],
+    ['Name' => 'Bob', 'Email' => 'bob@example.com'],
+    ['Name' => 'Charlie', 'Email' => 'charlie@example.com']
+];
+
+$result = $client->appendRows('Employees', $rows);
+```
+
+### Rij Updaten
+
+```php
+// Je hebt de rij ID nodig
+$rowId = 'abc123...';
+
+$result = $client->updateRow('Employees', $rowId, [
+    'Salary' => 65000,
+    'Department' => 'Management'
+]);
+```
+
+### Meerdere Rijen Updaten
+
+```php
+$updates = [
+    ['row_id' => 'abc123', 'row' => ['Salary' => 60000]],
+    ['row_id' => 'def456', 'row' => ['Salary' => 62000]],
+    ['row_id' => 'ghi789', 'row' => ['Salary' => 64000]]
+];
+
+$result = $client->updateRows('Employees', $updates);
+```
+
+### Rij Verwijderen
+
+```php
+// Enkele rij
+$result = $client->deleteRow('Employees', 'abc123');
+
+// Meerdere rijen
+$result = $client->deleteRows('Employees', ['abc123', 'def456', 'ghi789']);
+```
+
+## Complete API Referentie
+
+### Authenticatie
+
+#### `new SeaTableClient($serverUrl, $apiToken)`
+Maak een nieuwe client instantie.
+
+**Parameters:**
+- `$serverUrl` (string): Server URL (bijv. `https://cloud.seatable.io`)
+- `$apiToken` (string): Je API token
+
+**Voorbeeld:**
+```php
+$client = new SeaTableClient('https://cloud.seatable.io', 'token-hier');
+```
+
+#### `ping()`
+Test de verbinding en authenticatie.
+
+**Returns:** `bool` - True als authenticatie succesvol
+
+```php
+if ($client->ping()) {
+    echo "Verbinding OK!\n";
+}
+```
+
+#### `getBaseUuid()`
+Verkrijg het UUID van de huidige base (beschikbaar na authenticatie).
+
+**Returns:** `string|null` - Base UUID
+
+```php
+$uuid = $client->getBaseUuid();
+```
+
+### SQL Query Methoden
+
+#### `query($sql, $params = [])`
+Voer een SQL query uit.
+
+**Parameters:**
+- `$sql` (string): SQL query
+- `$params` (array): Parameters voor prepared statements (optioneel)
+
+**Returns:** `array|false` - Query resultaten of false bij fout
+
+**Voorbeeld:**
+```php
+$result = $client->query("SELECT * FROM Employees WHERE Department = 'Sales'");
+```
+
+#### `select($table, $columns = [], $where = '', $orderBy = '', $limit = null)`
+Helper methode voor SELECT queries.
+
+**Parameters:**
+- `$table` (string): Tabel naam
+- `$columns` (array): Kolommen (leeg = alle)
+- `$where` (string): WHERE clausule
+- `$orderBy` (string): ORDER BY clausule
+- `$limit` (int): LIMIT
+
+**Returns:** `array|false`
+
+**Voorbeeld:**
+```php
+$result = $client->select('Employees', ['Name', 'Email'], "Active = TRUE", 'Name ASC', 10);
+```
+
+#### `insert($table, $data)`
+Helper methode voor INSERT (alleen voor gearchiveerde bases).
+
+**Parameters:**
+- `$table` (string): Tabel naam
+- `$data` (array): Associatieve array met kolom => waarde
+
+**Returns:** `array|false`
+
+**Voorbeeld:**
+```php
+$result = $client->insert('Employees', [
+    'Name' => 'John Doe',
+    'Email' => 'john@example.com'
+]);
+```
+
+#### `update($table, $data, $where)`
+Helper methode voor UPDATE.
+
+**Parameters:**
+- `$table` (string): Tabel naam
+- `$data` (array): Data om te updaten
+- `$where` (string): WHERE clausule (verplicht!)
+
+**Returns:** `array|false`
+
+**Voorbeeld:**
+```php
+$result = $client->update('Employees', ['Salary' => 60000], "Name = 'John Doe'");
+```
+
+#### `delete($table, $where)`
+Helper methode voor DELETE.
+
+**Parameters:**
+- `$table` (string): Tabel naam
+- `$where` (string): WHERE clausule (verplicht!)
+
+**Returns:** `array|false`
+
+**Voorbeeld:**
+```php
+$result = $client->delete('Employees', "Active = FALSE");
+```
+
+### REST API Methoden
+
+#### `listRows($tableName, $view = null, $limit = 1000)`
+Haal rijen op uit een tabel.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$view` (string): View naam (optioneel)
+- `$limit` (int): Maximum aantal rijen
+
+**Returns:** `array|false`
+
+```php
+$rows = $client->listRows('Employees', 'Active Employees', 50);
+```
+
+#### `appendRow($tableName, $row)`
+Voeg een rij toe.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$row` (array): Associatieve array met kolom => waarde
+
+**Returns:** `array|false` - Bevat `_id` van de nieuwe rij
+
+```php
+$result = $client->appendRow('Employees', ['Name' => 'John', 'Email' => 'john@example.com']);
+$rowId = $result['_id'];
+```
+
+#### `appendRows($tableName, $rows)`
+Voeg meerdere rijen toe.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$rows` (array): Array van rijen
+
+**Returns:** `array|false`
+
+```php
+$result = $client->appendRows('Employees', [
+    ['Name' => 'Alice', 'Email' => 'alice@example.com'],
+    ['Name' => 'Bob', 'Email' => 'bob@example.com']
+]);
+```
+
+#### `updateRow($tableName, $rowId, $row)`
+Update een rij.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$rowId` (string): Rij ID
+- `$row` (array): Data om te updaten
+
+**Returns:** `array|false`
+
+```php
+$result = $client->updateRow('Employees', 'abc123', ['Salary' => 65000]);
+```
+
+#### `updateRows($tableName, $updates)`
+Update meerdere rijen.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$updates` (array): Array van updates `[['row_id' => 'xxx', 'row' => [data]], ...]`
+
+**Returns:** `array|false`
+
+```php
+$result = $client->updateRows('Employees', [
+    ['row_id' => 'abc123', 'row' => ['Salary' => 60000]],
+    ['row_id' => 'def456', 'row' => ['Salary' => 62000]]
+]);
+```
+
+#### `deleteRow($tableName, $rowId)`
+Verwijder een rij.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$rowId` (string): Rij ID
+
+**Returns:** `array|false`
+
+```php
+$result = $client->deleteRow('Employees', 'abc123');
+```
+
+#### `deleteRows($tableName, $rowIds)`
+Verwijder meerdere rijen.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+- `$rowIds` (array): Array van rij IDs
+
+**Returns:** `array|false`
+
+```php
+$result = $client->deleteRows('Employees', ['abc123', 'def456', 'ghi789']);
+```
+
+### Metadata Methoden
+
+#### `getMetadata()`
+Haal base metadata op (tabellen, kolommen, etc.).
+
+**Returns:** `array|false`
+
+```php
+$metadata = $client->getMetadata();
+```
+
+#### `getTables()`
+Haal lijst van alle tabellen in de base op.
+
+**Returns:** `array|false`
+
+```php
+$tables = $client->getTables();
+foreach ($tables as $table) {
+    echo $table['name'] . "\n";
+}
+```
+
+#### `getTable($tableName)`
+Haal informatie op van een specifieke tabel.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+
+**Returns:** `array|false`
+
+```php
+$table = $client->getTable('Employees');
+print_r($table['columns']);
+```
+
+#### `getColumns($tableName)`
+Haal alle kolommen van een tabel op.
+
+**Parameters:**
+- `$tableName` (string): Tabel naam
+
+**Returns:** `array|false`
+
+```php
+$columns = $client->getColumns('Employees');
+foreach ($columns as $col) {
+    echo "{$col['name']} ({$col['type']})\n";
+}
+```
+
+#### `getStructure()`
+Krijg een overzicht van de volledige base structuur.
+
+**Returns:** `array|false`
+
+```php
+$structure = $client->getStructure();
+foreach ($structure as $tableName => $tableInfo) {
+    echo "Tabel: $tableName\n";
+    foreach ($tableInfo['columns'] as $col) {
+        echo "  - {$col['name']} ({$col['type']})\n";
+    }
+}
+```
+
+### Foutafhandeling
+
+#### `getLastError()`
+Haal de laatste foutmelding op.
+
+**Returns:** `string|null`
+
+```php
+$result = $client->query("INVALID SQL");
+if ($result === false) {
+    echo "Fout: " . $client->getLastError() . "\n";
+}
+```
+
+## Foutafhandeling
+
+Alle methoden retourneren `false` bij fouten. Gebruik `getLastError()` voor details:
+
+```php
+$result = $client->query("SELECT * FROM NonExistentTable");
+
+if ($result === false) {
+    $error = $client->getLastError();
+    echo "Query mislukt: $error\n";
+
+    // Check specifieke fouten
+    if (strpos($error, 'HTTP Error 401') !== false) {
+        echo "Authenticatie probleem - check je API token\n";
+    } elseif (strpos($error, 'HTTP Error 404') !== false) {
+        echo "Tabel of base niet gevonden\n";
+    } elseif (strpos($error, 'HTTP Error 500') !== false) {
+        echo "Server fout - probeer later opnieuw\n";
+    }
+}
+```
+
+### Veelvoorkomende Fouten
+
+| Error Code | Betekenis | Oplossing |
+|------------|-----------|-----------|
+| HTTP 401 | Ongeldige authenticatie | Check je API token |
+| HTTP 403 | Geen toegang | Check token permissies (read/write) |
+| HTTP 404 | Niet gevonden | Check base UUID, tabel naam, of rij ID |
+| HTTP 500 | Server fout | Check SeaTable server status |
+| CURL Error | Netwerk probleem | Check internet connectie |
+
+### Best Practices voor Foutafhandeling
+
+```php
+function safeQuery($client, $sql) {
+    $maxRetries = 3;
+    $retryDelay = 1; // seconden
+
+    for ($i = 0; $i < $maxRetries; $i++) {
+        $result = $client->query($sql);
+
+        if ($result !== false) {
+            return $result;
+        }
+
+        $error = $client->getLastError();
+
+        // Retry alleen bij tijdelijke fouten
+        if (strpos($error, 'HTTP Error 500') !== false ||
+            strpos($error, 'CURL Error') !== false) {
+            echo "Tijdelijke fout, retry $i/$maxRetries...\n";
+            sleep($retryDelay);
+            $retryDelay *= 2; // Exponential backoff
+            continue;
+        }
+
+        // Permanente fout, stop direct
+        return false;
+    }
+
+    return false;
+}
+```
+
+## Voorbeelden
+
+Zie het bestand `examples.php` voor 18 uitgebreide voorbeelden van:
+
+1. Authenticatie
+2. Base structuur ophalen
+3. SQL SELECT - Alle rijen
+4. SQL SELECT met WHERE
+5. SQL SELECT met ORDER BY en LIMIT
+6. SQL aggregatie (COUNT, SUM, AVG)
+7. SQL GROUP BY
+8. Helper methode SELECT
+9. Rij toevoegen (REST API)
+10. Meerdere rijen toevoegen
+11. Rij updaten
+12. SQL UPDATE
+13. Complexe SQL queries
+14. Rijen ophalen (REST API)
+15. Rijen verwijderen
+16. Geavanceerde query voorbeelden
+17. Foutafhandeling
+18. Praktisch voorbeeld - Data analyse
+
+### Simpel Voorbeeld Script
+
+```php
+<?php
+require_once 'SeaTableClient.php';
+
+// Configuratie
+$client = new SeaTableClient(
+    'https://cloud.seatable.io',
+    'jouw-api-token-hier'
 );
 
+// Test connectie
+if (!$client->ping()) {
+    die("Geen verbinding: " . $client->getLastError() . "\n");
+}
+
+// Haal statistieken op
+$result = $client->query("
+    SELECT
+        Department,
+        COUNT(*) as employees,
+        AVG(Salary) as avg_salary,
+        MAX(Salary) as max_salary
+    FROM Employees
+    GROUP BY Department
+    ORDER BY avg_salary DESC
+");
+
 if ($result) {
-    echo "Upload geslaagd! ID: {$result['id']}\n";
-}
-```
+    echo "📊 Departement Statistieken:\n\n";
 
-### Bestanden downloaden
-
-```php
-$downloadUrl = $client->getDownloadLink($libraryId, '/document.pdf');
-
-if ($downloadUrl) {
-    // Download het bestand
-    $fileContent = file_get_contents($downloadUrl);
-    file_put_contents('/lokaal/pad/document.pdf', $fileContent);
-}
-```
-
-## SQL-achtige queries
-
-De Seafile API ondersteunt geen échte SQL, maar de client biedt SQL-achtige functionaliteit via zoeken en filters.
-
-### Basis zoeken (LIKE operator)
-
-```php
-// SELECT * FROM files WHERE name LIKE '%rapport%'
-$results = $client->search('rapport');
-
-foreach ($results['results'] as $file) {
-    echo "{$file['name']} - {$file['fullpath']}\n";
-}
-```
-
-### Geavanceerd zoeken met filters (WHERE clausules)
-
-```php
-// SELECT * FROM files
-// WHERE type = 'file'
-// AND size > 1048576
-// AND modified_time > '2024-01-01'
-
-$results = $client->advancedSearch([
-    'query' => '*',                    // Zoekterm (* = alles)
-    'obj_type' => 'file',             // WHERE type = 'file'
-    'size_from' => 1048576,           // WHERE size > 1MB
-    'time_from' => strtotime('2024-01-01')  // WHERE modified > datum
-]);
-```
-
-### Beschikbare filters (WHERE clausules)
-
-| Filter | SQL equivalent | Beschrijving |
-|--------|---------------|--------------|
-| `query` | `LIKE '%term%'` | Zoekterm (verplicht) |
-| `repo_id` | `library_id = 'xxx'` | Specifieke bibliotheek |
-| `path` | `path LIKE '/Documents%'` | Specifiek pad |
-| `obj_type` | `type = 'file'/'dir'` | Bestanden of mappen |
-| `size_from` | `size >= bytes` | Minimum bestandsgrootte |
-| `size_to` | `size <= bytes` | Maximum bestandsgrootte |
-| `time_from` | `modified >= timestamp` | Gewijzigd na datum |
-| `time_to` | `modified <= timestamp` | Gewijzigd voor datum |
-
-### Praktische query voorbeelden
-
-```php
-// Alle PDF bestanden groter dan 5MB
-$pdfs = $client->advancedSearch([
-    'query' => 'pdf',
-    'obj_type' => 'file',
-    'size_from' => 5242880  // 5MB
-]);
-
-// Bestanden in een specifieke map
-$docs = $client->advancedSearch([
-    'query' => '*',
-    'path' => '/Documents/2024'
-]);
-
-// Recent gewijzigde bestanden (laatste 7 dagen)
-$recent = $client->advancedSearch([
-    'query' => '*',
-    'time_from' => strtotime('-7 days')
-]);
-
-// Bestanden in een specifieke bibliotheek tussen 1MB en 10MB
-$filtered = $client->advancedSearch([
-    'query' => '*',
-    'repo_id' => 'abc-123-def-456',
-    'size_from' => 1048576,   // 1MB
-    'size_to' => 10485760     // 10MB
-]);
-```
-
-### Query resultaten verwerken
-
-```php
-$results = $client->advancedSearch(['query' => 'rapport']);
-
-if ($results) {
-    $total = $results['total'];
-    $items = $results['results'];
-
-    echo "Totaal gevonden: $total\n";
-
-    foreach ($items as $item) {
-        echo "Naam: {$item['name']}\n";
-        echo "Pad: {$item['fullpath']}\n";
-        echo "Bibliotheek: {$item['repo_name']}\n";
-        echo "Grootte: {$item['size']} bytes\n";
-        echo "---\n";
+    foreach ($result['results'] as $row) {
+        echo "Departement: {$row['Department']}\n";
+        echo "  Medewerkers: {$row['employees']}\n";
+        echo "  Gem. salaris: €" . number_format($row['avg_salary'], 2) . "\n";
+        echo "  Max salaris: €" . number_format($row['max_salary'], 2) . "\n\n";
     }
 } else {
     echo "Fout: " . $client->getLastError() . "\n";
 }
 ```
 
-## Complete API referentie
-
-### Authenticatie
-
-#### `SeafileClient::getToken($baseUrl, $username, $password)`
-Verkrijg een API token met username en password.
-
-**Parameters:**
-- `$baseUrl` (string): Server URL
-- `$username` (string): Gebruikersnaam
-- `$password` (string): Wachtwoord
-
-**Returns:** `string|false` - Token of false bij fout
-
-**Voorbeeld:**
-```php
-$token = SeafileClient::getToken(
-    'https://cloud.example.com',
-    'user@example.com',
-    'password123'
-);
-```
-
-### Client initialisatie
-
-#### `new SeafileClient($baseUrl, $token)`
-Maak een nieuwe client instantie.
-
-**Parameters:**
-- `$baseUrl` (string): Server URL
-- `$token` (string): API token
-
-**Voorbeeld:**
-```php
-$client = new SeafileClient('https://cloud.example.com', $token);
-```
-
-### Account & Server
-
-#### `ping()`
-Test de verbinding met de server.
-
-**Returns:** `bool` - True als verbinding OK
-
-```php
-if ($client->ping()) {
-    echo "Server is bereikbaar\n";
-}
-```
-
-#### `getAccountInfo()`
-Haal account informatie op.
-
-**Returns:** `array|false`
-
-```php
-$info = $client->getAccountInfo();
-// [
-//   'email' => 'user@example.com',
-//   'name' => 'Gebruiker Naam',
-//   'usage' => 1234567,
-//   'total' => 10737418240
-// ]
-```
-
-### Bibliotheken (Libraries/Repositories)
-
-#### `getLibraries()`
-Haal alle bibliotheken op.
-
-**Returns:** `array|false` - Array van bibliotheken
-
-```php
-$libraries = $client->getLibraries();
-```
-
-#### `getLibrary($repoId)`
-Haal een specifieke bibliotheek op.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-
-**Returns:** `array|false`
-
-```php
-$lib = $client->getLibrary('abc-123-def');
-```
-
-### Bestanden & Mappen
-
-#### `listDirectory($repoId, $path = '/')`
-Haal directory inhoud op.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Pad (standaard '/')
-
-**Returns:** `array|false` - Array van bestanden/mappen
-
-```php
-$items = $client->listDirectory('abc-123', '/Documents/');
-```
-
-#### `getFileDetail($repoId, $path)`
-Haal gedetailleerde file informatie op.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Bestandspad
-
-**Returns:** `array|false`
-
-```php
-$details = $client->getFileDetail('abc-123', '/document.pdf');
-// [
-//   'id' => 'file-id',
-//   'name' => 'document.pdf',
-//   'size' => 12345,
-//   'mtime' => 1234567890
-// ]
-```
-
-#### `getDownloadLink($repoId, $path)`
-Verkrijg download URL voor een bestand.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Bestandspad
-
-**Returns:** `string|false` - Download URL
-
-```php
-$url = $client->getDownloadLink('abc-123', '/file.pdf');
-$content = file_get_contents($url);
-```
-
-#### `uploadFile($repoId, $localPath, $remotePath = '/', $filename = null)`
-Upload een bestand.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$localPath` (string): Lokaal bestandspad
-- `$remotePath` (string): Remote map (standaard '/')
-- `$filename` (string): Naam op server (optioneel)
-
-**Returns:** `array|false`
-
-```php
-$result = $client->uploadFile(
-    'abc-123',
-    '/tmp/document.pdf',
-    '/Documents/',
-    'rapport-2024.pdf'
-);
-```
-
-#### `createDirectory($repoId, $path)`
-Maak een nieuwe map aan.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Pad naar nieuwe map
-
-**Returns:** `array|false`
-
-```php
-$client->createDirectory('abc-123', '/NieuweMapa');
-```
-
-#### `delete($repoId, $path)`
-Verwijder een bestand of map.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Pad naar item
-
-**Returns:** `bool`
-
-```php
-$client->delete('abc-123', '/oude-map/');
-```
-
-#### `rename($repoId, $path, $newName)`
-Hernoem een bestand of map.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Huidige pad
-- `$newName` (string): Nieuwe naam
-
-**Returns:** `bool`
-
-```php
-$client->rename('abc-123', '/oud.txt', 'nieuw.txt');
-```
-
-#### `copy($srcRepoId, $srcPath, $dstRepoId, $dstPath)`
-Kopieer een bestand of map.
-
-**Parameters:**
-- `$srcRepoId` (string): Bron bibliotheek ID
-- `$srcPath` (string): Bron pad
-- `$dstRepoId` (string): Doel bibliotheek ID
-- `$dstPath` (string): Doel pad
-
-**Returns:** `bool`
-
-```php
-$client->copy('abc-123', '/file.txt', 'def-456', '/backup/');
-```
-
-#### `move($srcRepoId, $srcPath, $dstRepoId, $dstPath)`
-Verplaats een bestand of map.
-
-**Parameters:**
-- `$srcRepoId` (string): Bron bibliotheek ID
-- `$srcPath` (string): Bron pad
-- `$dstRepoId` (string): Doel bibliotheek ID
-- `$dstPath` (string): Doel pad
-
-**Returns:** `bool`
-
-```php
-$client->move('abc-123', '/file.txt', 'abc-123', '/archief/');
-```
-
-### Zoeken
-
-#### `search($query, $perPage = 25)`
-Basis zoekfunctie.
-
-**Parameters:**
-- `$query` (string): Zoekterm
-- `$perPage` (int): Resultaten per pagina (standaard 25)
-
-**Returns:** `array|false`
-
-```php
-$results = $client->search('rapport', 50);
-```
-
-#### `advancedSearch($filters)`
-Geavanceerd zoeken met filters.
-
-**Parameters:**
-- `$filters` (array): Associatieve array met filters
-  - `query` (string, verplicht): Zoekterm
-  - `repo_id` (string): Specifieke bibliotheek
-  - `path` (string): Specifiek pad
-  - `obj_type` (string): 'file' of 'dir'
-  - `time_from` (int): Unix timestamp
-  - `time_to` (int): Unix timestamp
-  - `size_from` (int): Bytes
-  - `size_to` (int): Bytes
-
-**Returns:** `array|false`
-
-```php
-$results = $client->advancedSearch([
-    'query' => 'pdf',
-    'obj_type' => 'file',
-    'size_from' => 1048576,
-    'time_from' => strtotime('-30 days')
-]);
-```
-
-### Gedeelde links
-
-#### `getSharedLinks()`
-Haal alle gedeelde links op.
-
-**Returns:** `array|false`
-
-```php
-$links = $client->getSharedLinks();
-```
-
-#### `createShareLink($repoId, $path, $password = null, $expireDays = null)`
-Maak een gedeelde link.
-
-**Parameters:**
-- `$repoId` (string): Bibliotheek ID
-- `$path` (string): Bestandspad
-- `$password` (string): Optioneel wachtwoord
-- `$expireDays` (int): Aantal dagen geldig
-
-**Returns:** `array|false`
-
-```php
-$link = $client->createShareLink(
-    'abc-123',
-    '/document.pdf',
-    'geheim123',  // Wachtwoord
-    7             // 7 dagen geldig
-);
-// [
-//   'link' => 'https://server.com/f/abc123/',
-//   'token' => 'abc123',
-//   'expire_date' => '2024-12-31'
-// ]
-```
-
-#### `deleteShareLink($token)`
-Verwijder een gedeelde link.
-
-**Parameters:**
-- `$token` (string): Link token
-
-**Returns:** `bool`
-
-```php
-$client->deleteShareLink('abc123');
-```
-
-## Foutafhandeling
-
-De client retourneert `false` bij fouten. Gebruik `getLastError()` voor details:
-
-```php
-$result = $client->getLibraries();
-
-if ($result === false) {
-    echo "Fout opgetreden: " . $client->getLastError() . "\n";
-} else {
-    // Verwerk resultaat
-}
-```
-
-### Voorbeelden van foutafhandeling
-
-```php
-// Probeer een bestand te uploaden
-$result = $client->uploadFile($libId, '/pad/naar/bestand.pdf');
-
-if ($result === false) {
-    $error = $client->getLastError();
-
-    if (strpos($error, 'HTTP Error 404') !== false) {
-        echo "Bibliotheek niet gevonden\n";
-    } elseif (strpos($error, 'HTTP Error 403') !== false) {
-        echo "Geen toegang\n";
-    } elseif (strpos($error, 'Bestand niet gevonden') !== false) {
-        echo "Lokaal bestand bestaat niet\n";
-    } else {
-        echo "Onbekende fout: $error\n";
-    }
-} else {
-    echo "Upload geslaagd!\n";
-}
-```
-
-### Veelvoorkomende fouten
-
-| Error | Betekenis | Oplossing |
-|-------|-----------|-----------|
-| `HTTP Error 401` | Ongeldige authenticatie | Controleer je API token |
-| `HTTP Error 403` | Geen toegang | Controleer permissies |
-| `HTTP Error 404` | Niet gevonden | Controleer bibliotheek/bestand ID |
-| `HTTP Error 500` | Server fout | Controleer server logs |
-| `CURL Error` | Netwerk probleem | Controleer verbinding/firewall |
-
-## Voorbeelden
-
-Zie het bestand `examples.php` voor uitgebreide voorbeelden van:
-
-- Token verkrijgen
-- Connectie testen
-- Account informatie ophalen
-- Bibliotheken browsen
-- Bestanden zoeken
-- Bestanden uploaden/downloaden
-- Mappen aanmaken
-- Bestanden delen
-- SQL-achtige queries uitvoeren
-
-### Simpel voorbeeld script
+### Praktisch Voorbeeld: Data Import
 
 ```php
 <?php
-require_once 'SeafileClient.php';
+require_once 'SeaTableClient.php';
 
-// Configuratie
-$config = [
-    'server' => 'https://jouw-server.com',
-    'username' => 'jouw@email.com',
-    'password' => 'wachtwoord'
-];
+$client = new SeaTableClient($serverUrl, $apiToken);
 
-// Verkrijg token
-$token = SeafileClient::getToken(
-    $config['server'],
-    $config['username'],
-    $config['password']
-);
+// Lees CSV bestand
+$csvFile = 'employees.csv';
+$rows = [];
 
-if (!$token) {
-    die("Kon geen token verkrijgen\n");
+if (($handle = fopen($csvFile, 'r')) !== false) {
+    $headers = fgetcsv($handle); // Eerste rij = headers
+
+    while (($data = fgetcsv($handle)) !== false) {
+        $row = array_combine($headers, $data);
+        $rows[] = $row;
+    }
+
+    fclose($handle);
 }
 
-// Maak client
-$client = new SeafileClient($config['server'], $token);
+// Import in batches van 100
+$batches = array_chunk($rows, 100);
+$imported = 0;
 
-// Test connectie
-if (!$client->ping()) {
-    die("Geen verbinding met server\n");
+foreach ($batches as $i => $batch) {
+    echo "Importing batch " . ($i + 1) . "/" . count($batches) . "...\n";
+
+    $result = $client->appendRows('Employees', $batch);
+
+    if ($result) {
+        $imported += count($batch);
+    } else {
+        echo "Fout bij batch $i: " . $client->getLastError() . "\n";
+    }
 }
 
-// Haal bibliotheken op
-$libraries = $client->getLibraries();
+echo "✓ Import compleet: $imported rijen geïmporteerd\n";
+```
 
-echo "Je hebt " . count($libraries) . " bibliotheken:\n\n";
+### Praktisch Voorbeeld: Data Export
 
-foreach ($libraries as $lib) {
-    echo "📚 {$lib['name']}\n";
-    echo "   ID: {$lib['id']}\n";
-    echo "   Grootte: " . formatBytes($lib['size']) . "\n\n";
+```php
+<?php
+require_once 'SeaTableClient.php';
 
-    // Toon eerste 5 bestanden
-    $items = $client->listDirectory($lib['id'], '/');
+$client = new SeaTableClient($serverUrl, $apiToken);
 
-    if ($items) {
-        $count = 0;
-        foreach ($items as $item) {
-            if ($count++ >= 5) break;
+// Export data naar CSV
+$result = $client->query("SELECT * FROM Employees ORDER BY Name");
 
-            $icon = $item['type'] === 'dir' ? '📁' : '📄';
-            echo "   $icon {$item['name']}\n";
+if ($result) {
+    $rows = $result['results'];
+
+    $csvFile = 'export_' . date('Y-m-d') . '.csv';
+    $handle = fopen($csvFile, 'w');
+
+    // Headers
+    if (count($rows) > 0) {
+        fputcsv($handle, array_keys($rows[0]));
+
+        // Data
+        foreach ($rows as $row) {
+            fputcsv($handle, $row);
         }
     }
-    echo "\n";
-}
 
-function formatBytes($bytes) {
-    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    $bytes = max($bytes, 0);
-    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-    $pow = min($pow, count($units) - 1);
-    return round($bytes / (1 << (10 * $pow)), 2) . ' ' . $units[$pow];
+    fclose($handle);
+
+    echo "✓ Export compleet: " . count($rows) . " rijen naar $csvFile\n";
 }
 ```
 
 ## Tips & Best Practices
 
-### 1. Token opslag
+### 1. Token Beveiliging
 
 ❌ **Niet doen:**
 ```php
-$client = new SeafileClient($url, 'hardcoded-token-hier');
+$client = new SeaTableClient($url, 'hardcoded-token-123456');
 ```
 
 ✅ **Wel doen:**
 ```php
 // Gebruik omgevingsvariabelen
-$client = new SeafileClient($url, getenv('SEAFILE_TOKEN'));
+$client = new SeaTableClient($url, getenv('SEATABLE_API_TOKEN'));
 
 // Of een config bestand (buiten webroot!)
-$config = require '/var/config/seafile.php';
-$client = new SeafileClient($url, $config['token']);
+$config = require '/var/config/seatable.php';
+$client = new SeaTableClient($url, $config['token']);
 ```
 
-### 2. Foutafhandeling
+### 2. Query Optimalisatie
 
-❌ **Niet doen:**
+**Gebruik LIMIT:**
 ```php
-$result = $client->getLibraries();
-foreach ($result as $lib) { ... }  // Crash als $result false is!
+// Goed: LIMIT voorkomt te veel data
+$result = $client->query("SELECT * FROM BigTable LIMIT 100");
+
+// Slecht: Kan 10,000+ rijen retourneren
+$result = $client->query("SELECT * FROM BigTable");
 ```
 
-✅ **Wel doen:**
+**Selecteer alleen nodige kolommen:**
 ```php
-$result = $client->getLibraries();
+// Goed: Alleen wat je nodig hebt
+$result = $client->query("SELECT Name, Email FROM Employees");
+
+// Slecht: Onnodige data ophalen
+$result = $client->query("SELECT * FROM Employees");
+```
+
+### 3. Batch Operaties
+
+Voor bulk imports, gebruik batches:
+
+```php
+$data = [...]; // 1000 rijen
+$batches = array_chunk($data, 100); // Splits in batches van 100
+
+foreach ($batches as $batch) {
+    $client->appendRows('Table', $batch);
+    usleep(100000); // 0.1 seconde pauze tussen batches
+}
+```
+
+### 4. Error Handling
+
+Altijd errors afhandelen:
+
+```php
+$result = $client->query($sql);
+
 if ($result === false) {
-    error_log("Seafile fout: " . $client->getLastError());
+    error_log("SeaTable query failed: " . $client->getLastError());
+    // Fallback actie
     return;
 }
-foreach ($result as $lib) { ... }
+
+// Verwerk resultaat
 ```
 
-### 3. Grote uploads
+### 5. Caching
 
-Voor grote bestanden, overweeg chunked uploads:
+Cache metadata voor betere performance:
 
 ```php
-function uploadLargeFile($client, $repoId, $filePath, $remotePath) {
-    $maxSize = 100 * 1024 * 1024; // 100MB chunks
-    $fileSize = filesize($filePath);
+// Cache de structuur
+$cacheFile = '/tmp/seatable_structure.json';
 
-    if ($fileSize > $maxSize) {
-        echo "Waarschuwing: groot bestand ($fileSize bytes)\n";
-        echo "Dit kan even duren...\n";
-    }
-
-    return $client->uploadFile($repoId, $filePath, $remotePath);
+if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+    $structure = json_decode(file_get_contents($cacheFile), true);
+} else {
+    $structure = $client->getStructure();
+    file_put_contents($cacheFile, json_encode($structure));
 }
 ```
 
-### 4. Rate limiting
+## SeaTable Systeem Kolommen
 
-Voeg delays toe bij bulk operaties:
+Elke tabel heeft automatische systeem kolommen:
+
+| Kolom | Beschrijving |
+|-------|--------------|
+| `_id` | Unieke rij ID (gebruikt voor updates/deletes) |
+| `_ctime` | Aanmaak tijd (ISO 8601 formaat) |
+| `_mtime` | Laatste wijziging tijd |
+| `_creator` | Email van de maker |
+| `_last_modifier` | Email van laatste wijziger |
+
+Deze kunnen gebruikt worden in queries:
 
 ```php
-$files = glob('/pad/naar/bestanden/*');
+// Recent toegevoegde rijen
+$result = $client->query("
+    SELECT * FROM Employees
+    WHERE _ctime >= '2024-01-01'
+    ORDER BY _ctime DESC
+");
 
-foreach ($files as $file) {
-    $client->uploadFile($repoId, $file, '/backup/');
-    usleep(500000); // 0.5 seconde pauze
-}
+// Recent gewijzigde rijen
+$result = $client->query("
+    SELECT * FROM Employees
+    ORDER BY _mtime DESC
+    LIMIT 10
+");
+
+// Rijen van specifieke gebruiker
+$result = $client->query("
+    SELECT * FROM Employees
+    WHERE _creator = 'user@example.com'
+");
 ```
 
-### 5. Batch operaties
+## Veelgestelde Vragen (FAQ)
 
-Groepeer operaties voor betere performance:
+### Hoe maak ik een API token?
+
+Zie [API Token verkrijgen](#api-token-verkrijgen) voor gedetailleerde instructies.
+
+### Wat is het verschil tussen SQL en REST API methoden?
+
+- **SQL** (`query()`) - Voor complexe queries, filtering, aggregatie, JOIN
+- **REST API** (`appendRow()`, etc.) - Voor simpele CRUD operaties op individuele rijen
+
+Gebruik SQL voor complexe operaties, REST API voor simpele toevoeg/update acties.
+
+### Werkt INSERT via SQL?
+
+INSERT via SQL werkt **alleen voor gearchiveerde bases** (big data storage).
+
+Voor normale bases, gebruik de REST API methode `appendRow()` of `appendRows()`.
+
+### Hoeveel rijen kan ik per query ophalen?
+
+Maximum **10,000 rijen** per query. Zonder LIMIT worden standaard 100 rijen geretourneerd.
+
+Voor meer data, gebruik paginering met LIMIT en OFFSET:
 
 ```php
-// Haal alle library info in één keer op
-$libraries = $client->getLibraries();
+$pageSize = 1000;
+$page = 0;
 
-// Cache library IDs voor later gebruik
-$libCache = [];
-foreach ($libraries as $lib) {
-    $libCache[$lib['name']] = $lib['id'];
-}
+do {
+    $offset = $page * $pageSize;
+    $result = $client->query("SELECT * FROM Table LIMIT $pageSize OFFSET $offset");
+    $rows = $result['results'] ?? [];
 
-// Gebruik cache
-$docLibId = $libCache['Documenten'] ?? null;
-if ($docLibId) {
-    $client->uploadFile($docLibId, '/pad/naar/file.pdf');
-}
+    // Verwerk $rows...
+
+    $page++;
+} while (count($rows) === $pageSize);
 ```
 
-## Veelgestelde vragen (FAQ)
+### Hoe lang is een base token geldig?
 
-### Hoe krijg ik een API token?
+Base tokens zijn **3 dagen geldig**. De client vernieuwt deze automatisch, je hoeft hier niets voor te doen.
 
-Gebruik de `getToken()` methode met je username en password. Bewaar het token daarna veilig.
+### Kan ik meerdere bases tegelijk benaderen?
 
-### Kan ik SQL queries uitvoeren op Seafile?
-
-Nee, Seafile heeft geen directe SQL interface. Gebruik de `advancedSearch()` methode voor SQL-achtige filtering.
-
-### Werkt dit met Seafile Community Edition?
-
-Ja! Deze client werkt met zowel Community als Business/Professional Edition.
-
-### Hoe upload ik meerdere bestanden tegelijk?
-
-Loop door je bestanden en roep `uploadFile()` aan voor elk bestand:
+Nee, elk API token is gekoppeld aan één base. Voor meerdere bases heb je meerdere API tokens nodig:
 
 ```php
-$files = ['/file1.pdf', '/file2.pdf', '/file3.pdf'];
-
-foreach ($files as $file) {
-    $result = $client->uploadFile($libId, $file);
-    if ($result) {
-        echo "✓ $file geupload\n";
-    } else {
-        echo "✗ $file mislukt: " . $client->getLastError() . "\n";
-    }
-}
+$client1 = new SeaTableClient($url, $token1); // Base 1
+$client2 = new SeaTableClient($url, $token2); // Base 2
 ```
 
-### Hoe download ik een hele map?
+### Ondersteunen queries JOINs?
 
-Haal eerst de directory listing op, loop door de items:
+Ja! SeaTable ondersteunt **INNER JOIN** sinds versie 4.3:
 
 ```php
-function downloadDirectory($client, $repoId, $remotePath, $localPath) {
-    $items = $client->listDirectory($repoId, $remotePath);
-
-    foreach ($items as $item) {
-        if ($item['type'] === 'file') {
-            $downloadUrl = $client->getDownloadLink(
-                $repoId,
-                $remotePath . '/' . $item['name']
-            );
-
-            if ($downloadUrl) {
-                $content = file_get_contents($downloadUrl);
-                file_put_contents($localPath . '/' . $item['name'], $content);
-            }
-        } elseif ($item['type'] === 'dir') {
-            // Recursief voor submappen
-            mkdir($localPath . '/' . $item['name']);
-            downloadDirectory(
-                $client,
-                $repoId,
-                $remotePath . '/' . $item['name'],
-                $localPath . '/' . $item['name']
-            );
-        }
-    }
-}
+$result = $client->query("
+    SELECT e.Name, d.DepartmentName
+    FROM Employees e
+    INNER JOIN Departments d ON e.DeptID = d._id
+");
 ```
 
-### Kan ik verwijderde bestanden herstellen?
+LEFT JOIN, RIGHT JOIN en OUTER JOIN worden nog niet ondersteund.
 
-Deze client ondersteunt geen directe trash/restore functionaliteit. Gebruik de Seafile web interface hiervoor.
+### Hoe werk ik met datums?
 
-### Hoe kan ik de voortgang van een upload bijhouden?
-
-Voor upload voortgang kun je de cURL PROGRESSFUNCTION callback gebruiken:
+SeaTable gebruikt ISO 8601 formaat (`YYYY-MM-DD HH:MM:SS`):
 
 ```php
-// Dit vereist custom implementatie in de request() methode
-// Zie PHP cURL documentatie voor CURLOPT_PROGRESSFUNCTION
+// Datum filtering
+$result = $client->query("
+    SELECT * FROM Events
+    WHERE EventDate >= '2024-01-01 00:00:00'
+    AND EventDate < '2025-01-01 00:00:00'
+");
+
+// Datum in PHP formaat converteren
+$date = strtotime($row['EventDate']);
+echo date('d-m-Y', $date);
 ```
 
 ## Troubleshooting
 
+### "HTTP Error 401: Unauthorized"
+
+**Oorzaak:** Ongeldig API token
+
+**Oplossing:**
+- Check of je API token correct is
+- Genereer een nieuw token in SeaTable
+- Zorg dat het token read/write permissies heeft
+
+### "HTTP Error 404: Not Found"
+
+**Oorzaak:** Base, tabel of rij niet gevonden
+
+**Oplossing:**
+- Check of de tabel naam correct is (hoofdlettergevoelig!)
+- Check of je base UUID klopt
+- Verifieer dat de rij ID bestaat
+
+### "SQL syntax error"
+
+**Oorzaak:** Ongeldige SQL syntax
+
+**Oplossing:**
+- Check je SQL syntax
+- Gebruik backticks rond tabel/kolom namen: `` `Table Name` ``
+- Check of de kolom bestaat in je tabel
+
+### Query retourneert geen resultaten
+
+**Oorzaak:** Query heeft geen matches of tabel is leeg
+
+**Oplossing:**
+```php
+$result = $client->query("SELECT COUNT(*) as total FROM YourTable");
+$total = $result['results'][0]['total'] ?? 0;
+
+if ($total === 0) {
+    echo "Tabel is leeg\n";
+} else {
+    echo "Tabel heeft $total rijen, check je WHERE clausule\n";
+}
+```
+
 ### "CURL Error: SSL certificate problem"
 
+**Oorzaak:** SSL certificaat verificatie problemen
+
+**Oplossing:**
 ```php
-// LET OP: alleen voor development!
-// Voeg toe aan de request() methode voor testing:
+// Voor development/testing (NIET voor productie!)
+// Voeg toe aan SeaTableClient.php in de request() methode:
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 ```
 
-Voor productie: installeer correcte SSL certificaten.
-
-### "HTTP Error 401: Unauthorized"
-
-Je API token is verlopen of ongeldig. Verkrijg een nieuw token:
-
-```php
-$token = SeafileClient::getToken($url, $username, $password);
-```
-
-### "HTTP Error 500: Internal Server Error"
-
-Server-side probleem. Controleer:
-- Seafile server logs
-- Disk ruimte op de server
-- Database connectie
-
-### Upload mislukt zonder fout
-
-Controleer:
-- PHP `upload_max_filesize` en `post_max_size` instellingen
-- Seafile server upload limieten
-- Bestandspermissies
+Voor productie: zorg voor correcte SSL certificaten op je server.
 
 ## Licentie
 
 Deze client is open-source en mag vrijelijk gebruikt worden voor zowel commerciële als niet-commerciële doeleinden.
 
+## Links
+
+- [SeaTable Website](https://seatable.io)
+- [SeaTable API Documentatie](https://api.seatable.io)
+- [SeaTable SQL Referentie](https://developer.seatable.io/scripts/sql/reference/)
+- [SeaTable Forum](https://forum.seatable.io)
+
 ## Support
 
-Voor vragen of problemen:
-- Bekijk de officële Seafile API documentatie: https://seafile-api.readme.io/
-- Check de `examples.php` voor praktische voorbeelden
+Voor vragen over SeaTable zelf:
+- [SeaTable Forum](https://forum.seatable.io)
+- [SeaTable Documentatie](https://docs.seatable.io)
+
+Voor vragen over deze PHP client:
+- Bekijk de `examples.php` voor praktische voorbeelden
 - Raadpleeg deze handleiding voor API referentie
+- Check de broncode in `SeaTableClient.php`
 
-## Changelog
+---
 
-### Versie 1.0
-- Initiële release
-- Ondersteuning voor basis API operaties
-- Zoek en filter functionaliteit
-- Bestand upload/download
-- Gedeelde links beheer
+**Veel succes met je SeaTable project!** 🚀

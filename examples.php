@@ -1,363 +1,481 @@
 <?php
 /**
- * Voorbeelden van Seafile API gebruik
+ * Voorbeelden van SeaTable API gebruik
  *
- * Dit bestand toont praktische voorbeelden van hoe je de SeafileClient kunt gebruiken
+ * Dit bestand toont praktische voorbeelden van hoe je de SeaTableClient kunt gebruiken
+ * met volledige SQL query ondersteuning
  */
 
-require_once 'SeafileClient.php';
+require_once 'SeaTableClient.php';
 
 // ============================================================================
 // CONFIGURATIE
 // ============================================================================
 
-$SEAFILE_URL = 'https://jouw-seafile-server.com';  // Pas aan naar jouw server
-$SEAFILE_USERNAME = 'jouw@email.com';              // Pas aan naar jouw username
-$SEAFILE_PASSWORD = 'jouw-wachtwoord';             // Pas aan naar jouw wachtwoord
+$SEATABLE_URL = 'https://cloud.seatable.io';  // Of je eigen SeaTable server
+$SEATABLE_API_TOKEN = 'jouw-api-token-hier';  // API token van je base
 
-// Of gebruik direct een API token als je die al hebt:
-$SEAFILE_TOKEN = null;  // Bijvoorbeeld: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0'
+// Pas bovenstaande configuratie aan naar jouw situatie!
 
 // ============================================================================
-// VOORBEELD 1: API Token verkrijgen
+// CLIENT INITIALISATIE
 // ============================================================================
 
-echo "=== VOORBEELD 1: API Token verkrijgen ===\n\n";
+echo "=== SeaTable API Client Voorbeelden ===\n\n";
 
-if (!$SEAFILE_TOKEN) {
-    echo "Token verkrijgen met username en password...\n";
-    $token = SeafileClient::getToken($SEAFILE_URL, $SEAFILE_USERNAME, $SEAFILE_PASSWORD);
-
-    if ($token) {
-        echo "✓ Token verkregen: $token\n";
-        echo "  Bewaar dit token veilig! Je kunt het hergebruiken.\n\n";
-        $SEAFILE_TOKEN = $token;
-    } else {
-        echo "✗ Kon geen token verkrijgen. Controleer je inloggegevens.\n\n";
-        exit(1);
-    }
-} else {
-    echo "Bestaand token wordt gebruikt.\n\n";
-}
-
-// Maak client aan met token
-$client = new SeafileClient($SEAFILE_URL, $SEAFILE_TOKEN);
+$client = new SeaTableClient($SEATABLE_URL, $SEATABLE_API_TOKEN);
 
 // ============================================================================
-// VOORBEELD 2: Connectie testen
+// VOORBEELD 1: Authenticatie en connectie testen
 // ============================================================================
 
-echo "=== VOORBEELD 2: Connectie testen ===\n\n";
+echo "=== VOORBEELD 1: Authenticatie ===\n\n";
 
 if ($client->ping()) {
-    echo "✓ Verbinding met server is OK!\n\n";
+    echo "✓ Verbinding en authenticatie OK!\n";
+    echo "  Base UUID: " . $client->getBaseUuid() . "\n\n";
 } else {
-    echo "✗ Kan geen verbinding maken: " . $client->getLastError() . "\n\n";
+    echo "✗ Authenticatie mislukt: " . $client->getLastError() . "\n\n";
     exit(1);
 }
 
 // ============================================================================
-// VOORBEELD 3: Account informatie ophalen
+// VOORBEELD 2: Base structuur ophalen
 // ============================================================================
 
-echo "=== VOORBEELD 3: Account informatie ===\n\n";
+echo "=== VOORBEELD 2: Base structuur ===\n\n";
 
-$accountInfo = $client->getAccountInfo();
-if ($accountInfo) {
-    echo "Gebruiker: {$accountInfo['email']}\n";
-    echo "Naam: {$accountInfo['name']}\n";
-    echo "Ruimte gebruikt: " . formatBytes($accountInfo['usage']) . "\n";
-    echo "Totale ruimte: " . formatBytes($accountInfo['total']) . "\n\n";
+$structure = $client->getStructure();
+
+if ($structure) {
+    echo "Tabellen in deze base:\n\n";
+
+    foreach ($structure as $tableName => $tableInfo) {
+        echo "📊 Tabel: $tableName\n";
+        echo "   Kolommen:\n";
+
+        foreach ($tableInfo['columns'] as $column) {
+            echo "   - {$column['name']} ({$column['type']})\n";
+        }
+        echo "\n";
+    }
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
+}
+
+// Voor de volgende voorbeelden gebruiken we de eerste tabel
+$tables = $client->getTables();
+$firstTable = $tables[0]['name'] ?? 'Table1';  // Standaard SeaTable tabel naam
+
+echo "Voor volgende voorbeelden gebruiken we tabel: '$firstTable'\n\n";
+
+// ============================================================================
+// VOORBEELD 3: SQL SELECT - Alle rijen ophalen
+// ============================================================================
+
+echo "=== VOORBEELD 3: SQL SELECT - Alle rijen ===\n\n";
+
+$result = $client->query("SELECT * FROM `$firstTable` LIMIT 10");
+
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "Gevonden rijen: " . count($rows) . "\n\n";
+
+    if (count($rows) > 0) {
+        // Toon eerste rij als voorbeeld
+        echo "Eerste rij:\n";
+        print_r($rows[0]);
+        echo "\n";
+    }
 } else {
     echo "✗ Fout: " . $client->getLastError() . "\n\n";
 }
 
 // ============================================================================
-// VOORBEELD 4: Bibliotheken ophalen (SELECT * FROM libraries)
+// VOORBEELD 4: SQL SELECT met WHERE clausule
 // ============================================================================
 
-echo "=== VOORBEELD 4: Alle bibliotheken ophalen ===\n\n";
+echo "=== VOORBEELD 4: SQL SELECT met WHERE ===\n\n";
 
-$libraries = $client->getLibraries();
-if ($libraries) {
-    echo "Gevonden bibliotheken: " . count($libraries) . "\n\n";
+// Pas de kolom naam aan naar een kolom die in jouw tabel bestaat
+$sql = "SELECT * FROM `$firstTable` WHERE Name IS NOT NULL LIMIT 5";
+$result = $client->query($sql);
 
-    foreach ($libraries as $lib) {
-        echo "ID: {$lib['id']}\n";
-        echo "  Naam: {$lib['name']}\n";
-        echo "  Type: {$lib['type']}\n";
-        echo "  Grootte: " . formatBytes($lib['size']) . "\n";
-        echo "  Eigenaar: {$lib['owner']}\n";
-        echo "  Encrypted: " . ($lib['encrypted'] ? 'Ja' : 'Nee') . "\n";
-        echo "\n";
-    }
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "SQL: $sql\n";
+    echo "Resultaten: " . count($rows) . "\n\n";
+} else {
+    echo "Query: $sql\n";
+    echo "Let op: Pas de kolomnaam 'Name' aan naar een kolom in jouw tabel\n";
+    echo "Fout: " . $client->getLastError() . "\n\n";
+}
 
-    // Sla eerste bibliotheek ID op voor verdere voorbeelden
-    $firstLibraryId = $libraries[0]['id'] ?? null;
+// ============================================================================
+// VOORBEELD 5: SQL SELECT met ORDER BY en LIMIT
+// ============================================================================
+
+echo "=== VOORBEELD 5: SQL SELECT met ORDER BY ===\n\n";
+
+$sql = "SELECT * FROM `$firstTable` ORDER BY _ctime DESC LIMIT 5";
+$result = $client->query($sql);
+
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "Laatste 5 aangemakte rijen:\n";
+    echo "Gevonden: " . count($rows) . " rijen\n\n";
 } else {
     echo "✗ Fout: " . $client->getLastError() . "\n\n";
-    $firstLibraryId = null;
 }
 
 // ============================================================================
-// VOORBEELD 5: Directory inhoud ophalen (SELECT * FROM files WHERE path = '/')
+// VOORBEELD 6: SQL SELECT met aggregatie (COUNT, SUM, AVG)
 // ============================================================================
 
-echo "=== VOORBEELD 5: Directory inhoud ophalen ===\n\n";
+echo "=== VOORBEELD 6: SQL aggregatie functies ===\n\n";
 
-if ($firstLibraryId) {
-    $items = $client->listDirectory($firstLibraryId, '/');
+$sql = "SELECT COUNT(*) as total FROM `$firstTable`";
+$result = $client->query($sql);
 
-    if ($items) {
-        echo "Items in root directory: " . count($items) . "\n\n";
-
-        foreach ($items as $item) {
-            $type = $item['type'] === 'dir' ? '[DIR] ' : '[FILE]';
-            $size = $item['type'] === 'file' ? ' (' . formatBytes($item['size']) . ')' : '';
-            echo "$type {$item['name']}$size\n";
-        }
-        echo "\n";
-    } else {
-        echo "✗ Fout: " . $client->getLastError() . "\n\n";
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    if (count($rows) > 0) {
+        echo "Totaal aantal rijen: " . $rows[0]['total'] . "\n\n";
     }
 }
 
 // ============================================================================
-// VOORBEELD 6: Zoeken (SELECT * FROM files WHERE name LIKE '%query%')
+// VOORBEELD 7: SQL SELECT met GROUP BY
 // ============================================================================
 
-echo "=== VOORBEELD 6: Zoeken in bestanden ===\n\n";
+echo "=== VOORBEELD 7: SQL GROUP BY ===\n\n";
 
-$zoekterm = 'rapport';  // Pas aan naar wat je wilt zoeken
-$zoekresultaten = $client->search($zoekterm);
+// Voorbeeld: groepeer per status (pas aan naar jouw kolommen)
+$sql = "SELECT _creator, COUNT(*) as count FROM `$firstTable` GROUP BY _creator";
+$result = $client->query($sql);
 
-if ($zoekresultaten) {
-    $total = $zoekresultaten['total'] ?? 0;
-    $results = $zoekresultaten['results'] ?? [];
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "Rijen per maker:\n";
 
-    echo "Zoeken naar '$zoekterm': $total resultaten gevonden\n\n";
-
-    foreach ($results as $result) {
-        echo "Bestand: {$result['name']}\n";
-        echo "  Pad: {$result['fullpath']}\n";
-        echo "  Bibliotheek: {$result['repo_name']}\n";
-        if (isset($result['size'])) {
-            echo "  Grootte: " . formatBytes($result['size']) . "\n";
-        }
-        echo "\n";
-    }
-} else {
-    echo "Geen resultaten of fout: " . $client->getLastError() . "\n\n";
-}
-
-// ============================================================================
-// VOORBEELD 7: Geavanceerd zoeken met filters
-// ============================================================================
-
-echo "=== VOORBEELD 7: Geavanceerd zoeken met filters ===\n\n";
-
-// Zoek naar PDF bestanden die groter zijn dan 1MB
-$filters = [
-    'query' => 'pdf',
-    'obj_type' => 'file',
-    'size_from' => 1048576,  // 1MB in bytes
-];
-
-$results = $client->advancedSearch($filters);
-
-if ($results) {
-    $total = $results['total'] ?? 0;
-    echo "PDF bestanden > 1MB: $total gevonden\n\n";
-
-    foreach ($results['results'] ?? [] as $result) {
-        echo "{$result['name']} - " . formatBytes($result['size'] ?? 0) . "\n";
+    foreach ($rows as $row) {
+        echo "  {$row['_creator']}: {$row['count']} rijen\n";
     }
     echo "\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
 }
 
 // ============================================================================
-// VOORBEELD 8: Bestand details ophalen
+// VOORBEELD 8: Helper methode SELECT
 // ============================================================================
 
-echo "=== VOORBEELD 8: Bestand details ophalen ===\n\n";
+echo "=== VOORBEELD 8: Helper methode SELECT ===\n\n";
 
-if ($firstLibraryId && isset($items) && count($items) > 0) {
-    // Zoek eerste bestand in de lijst
-    $firstFile = null;
-    foreach ($items as $item) {
-        if ($item['type'] === 'file') {
-            $firstFile = $item;
-            break;
-        }
-    }
+// Eenvoudigere manier om SELECT queries te doen
+$result = $client->select(
+    $firstTable,           // Tabel
+    [],                    // Kolommen (leeg = alle)
+    '_ctime IS NOT NULL',  // WHERE
+    '_ctime DESC',         // ORDER BY
+    5                      // LIMIT
+);
 
-    if ($firstFile) {
-        $filePath = '/' . $firstFile['name'];
-        $details = $client->getFileDetail($firstLibraryId, $filePath);
-
-        if ($details) {
-            echo "Details van '{$firstFile['name']}':\n";
-            echo "  ID: {$details['id']}\n";
-            echo "  Grootte: " . formatBytes($details['size']) . "\n";
-            echo "  Laatst gewijzigd: " . date('d-m-Y H:i:s', $details['mtime']) . "\n";
-            echo "\n";
-        }
-    }
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "Resultaten met helper methode: " . count($rows) . " rijen\n\n";
 }
 
 // ============================================================================
-// VOORBEELD 9: Download link verkrijgen
+// VOORBEELD 9: Rijen toevoegen (REST API methode)
 // ============================================================================
 
-echo "=== VOORBEELD 9: Download link verkrijgen ===\n\n";
+echo "=== VOORBEELD 9: Rij toevoegen ===\n\n";
 
-if ($firstLibraryId && isset($firstFile)) {
-    $filePath = '/' . $firstFile['name'];
-    $downloadLink = $client->getDownloadLink($firstLibraryId, $filePath);
+// Voeg een test rij toe
+$newRow = [
+    'Name' => 'Test Entry ' . date('Y-m-d H:i:s'),
+    'Description' => 'Aangemaakt via API voorbeeld'
+];
 
-    if ($downloadLink) {
-        echo "Download link voor '{$firstFile['name']}':\n";
-        echo "$downloadLink\n\n";
-        echo "Je kunt dit gebruiken om het bestand te downloaden:\n";
-        echo "  curl -H 'Authorization: Token $SEAFILE_TOKEN' '$downloadLink' -o bestand.ext\n\n";
+echo "Nieuwe rij toevoegen...\n";
+$result = $client->appendRow($firstTable, $newRow);
+
+if ($result) {
+    echo "✓ Rij toegevoegd!\n";
+    if (isset($result['_id'])) {
+        echo "  Rij ID: {$result['_id']}\n";
+        $testRowId = $result['_id'];
     }
+    echo "\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n";
+    echo "Let op: Pas de kolomnamen 'Name' en 'Description' aan naar jouw tabel\n\n";
+    $testRowId = null;
 }
 
 // ============================================================================
-// VOORBEELD 10: Bestand uploaden
+// VOORBEELD 10: Meerdere rijen toevoegen
 // ============================================================================
 
-echo "=== VOORBEELD 10: Bestand uploaden ===\n\n";
+echo "=== VOORBEELD 10: Meerdere rijen toevoegen ===\n\n";
 
-// Maak een test bestand
-$testFile = '/tmp/test-upload.txt';
-file_put_contents($testFile, "Dit is een test bestand, aangemaakt op " . date('Y-m-d H:i:s'));
+$rows = [
+    [
+        'Name' => 'Batch Entry 1',
+        'Description' => 'Eerste batch entry'
+    ],
+    [
+        'Name' => 'Batch Entry 2',
+        'Description' => 'Tweede batch entry'
+    ],
+    [
+        'Name' => 'Batch Entry 3',
+        'Description' => 'Derde batch entry'
+    ]
+];
 
-if ($firstLibraryId && file_exists($testFile)) {
-    echo "Test bestand uploaden...\n";
-    $result = $client->uploadFile($firstLibraryId, $testFile, '/', 'test-upload.txt');
+echo "3 rijen tegelijk toevoegen...\n";
+$result = $client->appendRows($firstTable, $rows);
+
+if ($result) {
+    echo "✓ Rijen toegevoegd!\n\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
+}
+
+// ============================================================================
+// VOORBEELD 11: Rij updaten
+// ============================================================================
+
+echo "=== VOORBEELD 11: Rij updaten ===\n\n";
+
+if ($testRowId) {
+    $updates = [
+        'Description' => 'Geüpdatet op ' . date('Y-m-d H:i:s')
+    ];
+
+    echo "Rij updaten...\n";
+    $result = $client->updateRow($firstTable, $testRowId, $updates);
 
     if ($result) {
-        echo "✓ Bestand succesvol geupload!\n";
-        echo "  ID: {$result['id']}\n";
-        echo "  Naam: {$result['name']}\n\n";
-    } else {
-        echo "✗ Upload mislukt: " . $client->getLastError() . "\n\n";
-    }
-
-    // Opruimen
-    unlink($testFile);
-}
-
-// ============================================================================
-// VOORBEELD 11: Directory aanmaken
-// ============================================================================
-
-echo "=== VOORBEELD 11: Directory aanmaken ===\n\n";
-
-if ($firstLibraryId) {
-    $newDir = '/TestMap-' . time();
-
-    echo "Nieuwe map aanmaken: $newDir\n";
-    $result = $client->createDirectory($firstLibraryId, $newDir);
-
-    if ($result !== false) {
-        echo "✓ Map succesvol aangemaakt!\n\n";
-
-        // Verwijder de testmap weer
-        echo "Testmap verwijderen...\n";
-        if ($client->delete($firstLibraryId, $newDir)) {
-            echo "✓ Map verwijderd\n\n";
-        }
+        echo "✓ Rij geüpdatet!\n\n";
     } else {
         echo "✗ Fout: " . $client->getLastError() . "\n\n";
     }
 }
 
 // ============================================================================
-// VOORBEELD 12: Gedeelde link maken
+// VOORBEELD 12: SQL UPDATE query
 // ============================================================================
 
-echo "=== VOORBEELD 12: Gedeelde link maken ===\n\n";
+echo "=== VOORBEELD 12: SQL UPDATE ===\n\n";
 
-if ($firstLibraryId && isset($firstFile)) {
-    $filePath = '/' . $firstFile['name'];
+// Update via SQL (pas aan naar jouw kolommen)
+$sql = "UPDATE `$firstTable` SET Description = 'Bulk update via SQL'
+        WHERE Name LIKE 'Batch Entry%'";
 
-    echo "Gedeelde link maken voor '{$firstFile['name']}'...\n";
-    $shareLink = $client->createShareLink(
-        $firstLibraryId,
-        $filePath,
-        null,  // Geen wachtwoord
-        7      // Geldig voor 7 dagen
-    );
+echo "SQL: $sql\n";
+$result = $client->query($sql);
 
-    if ($shareLink) {
-        echo "✓ Gedeelde link aangemaakt!\n";
-        echo "  Link: {$shareLink['link']}\n";
-        echo "  Token: {$shareLink['token']}\n";
-        echo "  Verloopt: " . date('d-m-Y', strtotime($shareLink['expire_date'])) . "\n\n";
+if ($result) {
+    echo "✓ Update uitgevoerd!\n\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
+}
 
-        // Verwijder de link weer
-        echo "Gedeelde link verwijderen...\n";
-        if ($client->deleteShareLink($shareLink['token'])) {
-            echo "✓ Link verwijderd\n\n";
-        }
-    } else {
-        echo "✗ Fout: " . $client->getLastError() . "\n\n";
+// ============================================================================
+// VOORBEELD 13: Complexe SQL queries
+// ============================================================================
+
+echo "=== VOORBEELD 13: Complexe SQL queries ===\n\n";
+
+// Query 1: SELECT met meerdere voorwaarden
+echo "Query 1: Meerdere WHERE voorwaarden\n";
+$sql = "SELECT * FROM `$firstTable`
+        WHERE _ctime > '2024-01-01'
+        AND Name IS NOT NULL
+        ORDER BY _mtime DESC
+        LIMIT 10";
+
+$result = $client->query($sql);
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "  Resultaten: " . count($rows) . " rijen\n";
+}
+echo "\n";
+
+// Query 2: Gebruik van LIKE
+echo "Query 2: LIKE operator\n";
+$sql = "SELECT Name, _ctime FROM `$firstTable`
+        WHERE Name LIKE '%Test%'
+        LIMIT 5";
+
+$result = $client->query($sql);
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "  Resultaten met 'Test' in naam: " . count($rows) . " rijen\n";
+}
+echo "\n";
+
+// Query 3: COUNT met GROUP BY
+echo "Query 3: COUNT met GROUP BY\n";
+$sql = "SELECT _creator, COUNT(*) as total, MAX(_mtime) as last_modified
+        FROM `$firstTable`
+        GROUP BY _creator";
+
+$result = $client->query($sql);
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    echo "  Statistieken per gebruiker: " . count($rows) . " gebruikers\n";
+
+    foreach ($rows as $row) {
+        echo "    - {$row['_creator']}: {$row['total']} rijen\n";
+    }
+}
+echo "\n";
+
+// ============================================================================
+// VOORBEELD 14: Rijen ophalen met filters (REST API)
+// ============================================================================
+
+echo "=== VOORBEELD 14: Rijen ophalen ===\n\n";
+
+$rows = $client->listRows($firstTable, null, 10);
+
+if ($rows) {
+    echo "Eerste 10 rijen via REST API: " . count($rows) . " rijen\n\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
+}
+
+// ============================================================================
+// VOORBEELD 15: Rijen verwijderen
+// ============================================================================
+
+echo "=== VOORBEELD 15: Rijen verwijderen ===\n\n";
+
+// Verwijder test rijen via SQL DELETE
+$sql = "DELETE FROM `$firstTable` WHERE Name LIKE 'Test Entry%'";
+
+echo "Test rijen verwijderen via SQL...\n";
+echo "SQL: $sql\n";
+$result = $client->query($sql);
+
+if ($result) {
+    echo "✓ Test rijen verwijderd!\n\n";
+} else {
+    echo "✗ Fout: " . $client->getLastError() . "\n\n";
+}
+
+// Verwijder batch entries
+$sql = "DELETE FROM `$firstTable` WHERE Name LIKE 'Batch Entry%'";
+$result = $client->query($sql);
+
+if ($result) {
+    echo "✓ Batch entries verwijderd!\n\n";
+}
+
+// ============================================================================
+// VOORBEELD 16: Geavanceerde query voorbeelden
+// ============================================================================
+
+echo "=== VOORBEELD 16: Geavanceerde query voorbeelden ===\n\n";
+
+echo "1. Datum filtering:\n";
+$sql = "SELECT * FROM `$firstTable`
+        WHERE _ctime >= '2024-01-01 00:00:00'
+        AND _ctime < '2025-01-01 00:00:00'
+        LIMIT 5";
+echo "   $sql\n\n";
+
+echo "2. Numerieke vergelijkingen:\n";
+$sql = "SELECT * FROM `$firstTable`
+        WHERE _id IS NOT NULL
+        LIMIT 5";
+echo "   $sql\n\n";
+
+echo "3. IN operator:\n";
+$sql = "SELECT * FROM `$firstTable`
+        WHERE _creator IN ('user1@example.com', 'user2@example.com')
+        LIMIT 5";
+echo "   $sql\n\n";
+
+echo "4. Subquery (indien ondersteund):\n";
+echo "   SELECT * FROM `$firstTable` WHERE ... \n\n";
+
+echo "5. DISTINCT:\n";
+$sql = "SELECT DISTINCT _creator FROM `$firstTable`";
+echo "   $sql\n\n";
+
+// ============================================================================
+// VOORBEELD 17: Foutafhandeling
+// ============================================================================
+
+echo "=== VOORBEELD 17: Foutafhandeling ===\n\n";
+
+// Probeer een ongeldige query
+$result = $client->query("SELECT * FROM niet_bestaande_tabel");
+
+if ($result === false) {
+    echo "✓ Foutafhandeling werkt correct\n";
+    echo "  Foutmelding: " . $client->getLastError() . "\n\n";
+}
+
+// ============================================================================
+// VOORBEELD 18: Praktisch gebruik - Data analyse
+// ============================================================================
+
+echo "=== VOORBEELD 18: Praktisch voorbeeld - Data analyse ===\n\n";
+
+// Haal statistieken op
+$stats = [];
+
+// Totaal aantal rijen
+$result = $client->query("SELECT COUNT(*) as total FROM `$firstTable`");
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    $stats['total_rows'] = $rows[0]['total'] ?? 0;
+}
+
+// Aantal unieke makers
+$result = $client->query("SELECT COUNT(DISTINCT _creator) as creators FROM `$firstTable`");
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    $stats['unique_creators'] = $rows[0]['creators'] ?? 0;
+}
+
+// Nieuwste entry
+$result = $client->query("SELECT * FROM `$firstTable` ORDER BY _ctime DESC LIMIT 1");
+if ($result) {
+    $rows = $result['results'] ?? $result['rows'] ?? [];
+    if (count($rows) > 0) {
+        $stats['newest_entry'] = $rows[0]['_ctime'] ?? 'Onbekend';
     }
 }
 
-// ============================================================================
-// VOORBEELD 13: SQL-achtige queries met complexe filters
-// ============================================================================
-
-echo "=== VOORBEELD 13: SQL-achtige queries ===\n\n";
-
-echo "Query 1: SELECT * FROM files WHERE type='file' AND name LIKE '%2024%'\n";
-$result1 = $client->advancedSearch([
-    'query' => '2024',
-    'obj_type' => 'file'
-]);
-echo "  Resultaten: " . ($result1['total'] ?? 0) . "\n\n";
-
-echo "Query 2: SELECT * FROM files WHERE size > 10MB AND modified > laatste_week\n";
-$weekAgo = strtotime('-1 week');
-$result2 = $client->advancedSearch([
-    'query' => '*',  // Zoek alles
-    'size_from' => 10485760,  // 10MB
-    'time_from' => $weekAgo
-]);
-echo "  Resultaten: " . ($result2['total'] ?? 0) . "\n\n";
-
-if ($firstLibraryId) {
-    echo "Query 3: SELECT * FROM files WHERE library_id = '$firstLibraryId' AND path LIKE '/Documents%'\n";
-    $result3 = $client->advancedSearch([
-        'query' => '*',
-        'repo_id' => $firstLibraryId,
-        'path' => '/Documents'
-    ]);
-    echo "  Resultaten: " . ($result3['total'] ?? 0) . "\n\n";
-}
+echo "📊 Base Statistieken:\n";
+echo "   Totaal rijen: " . ($stats['total_rows'] ?? 0) . "\n";
+echo "   Unieke makers: " . ($stats['unique_creators'] ?? 0) . "\n";
+echo "   Nieuwste entry: " . ($stats['newest_entry'] ?? 'Onbekend') . "\n";
+echo "\n";
 
 // ============================================================================
-// HULPFUNCTIES
+// KLAAR
 // ============================================================================
-
-/**
- * Format bytes naar leesbare grootte
- */
-function formatBytes($bytes, $precision = 2) {
-    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-    $bytes = max($bytes, 0);
-    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-    $pow = min($pow, count($units) - 1);
-
-    $bytes /= (1 << (10 * $pow));
-
-    return round($bytes, $precision) . ' ' . $units[$pow];
-}
 
 echo "=== KLAAR ===\n\n";
-echo "Alle voorbeelden zijn uitgevoerd!\n";
-echo "Bekijk de code in examples.php om te zien hoe elk voorbeeld werkt.\n";
+echo "Alle voorbeelden zijn uitgevoerd!\n\n";
+
+echo "💡 Tips:\n";
+echo "   - Pas de kolomnamen aan naar jouw tabel structuur\n";
+echo "   - Gebruik \$client->getStructure() om je tabel structuur te zien\n";
+echo "   - SQL queries ondersteunen max 10,000 rijen\n";
+echo "   - Base tokens zijn 3 dagen geldig en worden automatisch vernieuwd\n";
+echo "   - Bekijk SeaTableClient.php voor alle beschikbare methoden\n";
+echo "\n";
+
+echo "📚 Documentatie:\n";
+echo "   - SeaTable API: https://api.seatable.io\n";
+echo "   - SQL Reference: https://developer.seatable.io/scripts/sql/reference/\n";
+echo "\n";
